@@ -53,6 +53,11 @@ class SerialLink:
         else:
             self.param = param
 
+    def __repr__(self):
+
+        argcheck.getvector(self.links)
+        return self.name + self.links
+
     def __iter__(self):
         return (each for each in self.links)
 
