@@ -10,7 +10,7 @@ from math import pi
 import numpy as np
 
 
-class irb140(SerialLink):
+class Irb140(SerialLink):
 
     """
     MDL_IRB140 Create model of ABB IRB 140 manipulator
@@ -143,7 +143,7 @@ class irb140(SerialLink):
 
     # and build a serial link manipulator
 
-        super(irb140, self).__init__(
+        super(Irb140, self).__init__(
             L,
             basemesh="ABB/IRB140/link0.stl",
             name='IRB 140',

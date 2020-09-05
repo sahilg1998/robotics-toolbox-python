@@ -122,17 +122,15 @@ class Link(list):
         """
 
         # kinematic parameters
-
-        self.alpha = 0
-        self.a = 0
+        self.jointtype = None
         self.theta = 0
+        self._alpha = 0
+        self._a = 0
         self.d = 0
-        self.jointtype = 'R'
-        self.mdh = 0
-        self.offset = 0
-        self.flip = False
-        self.qlim = [-pi, pi]
         self.mdh = False
+        self._offset = 0
+        self.flip = False
+        self._qlim = [-pi, pi]
 
         """
         Dynamic parameters
@@ -149,7 +147,7 @@ class Link(list):
         self.Tc = [0, 0]
 
         # Meshes
-        self.mesh = None
+        self._mesh = None
 
         # for every passed argument, check if its a valid attribute and then set it
         for name, value in kwargs.items():
@@ -165,9 +163,19 @@ class Link(list):
             if '_' + name in self.__dict__:
                 setattr(self, name, value)
 
+        # check for confused jointtype
+        if self.theta is not 0:
+            if self.d is not 0:
+                if self.jointtype is not 'R' and self.jointtype is not 'P':
+                    raise ValueError('Specify one of either theta or d. Or give jointtype ("R" or "P"')
+            else:
+                self.jointtype = 'P'
+        elif self.jointtype is None:
+            self.jointtype = 'R'
+
         # convert qlim to radians if required, can only be done after jointtype is known
         if self.jointtype == 'R' and units == 'deg':
-            self.qlim = [v * pi / 180 for v in self.qlim]
+            self._qlim = [v * pi / 180 for v in self._qlim]
 
     def __str__(self):
 
@@ -177,16 +185,62 @@ class Link(list):
             conv = 'mod'
 
         if self.jointtype == 'R':
-            return "Revolute("+conv+") joint with attributes: d=" + \
-                    str(self.d)+", a = "+str(self.a)+", alpha = "+str(self.alpha)+", qlim = ("+str(self.qlim[0])+", "+str(self.qlim[0])+")"
+            return "Revolute(" + conv +") joint with attributes: d=" + \
+                   str(self.d) + ", a = " + str(self._a) + ", alpha = " + str(self._alpha) + ", qlim = (" + str(self._qlim[0]) + ", " + str(self._qlim[0]) + ")"
                     #f"d={self.d:.3g}, a={self.a:.3g}, alpha={self.alpha:.3g}, qlim=({self.qlim[0]:.3g}, {self.qlim[1]:.3g})"
         elif self.jointtype == 'P':
-            return "Prismatic("+conv+") joint with attributes: theta = "+\
-                   str(self.theta)+", a = "+str(self.a)+", alpha = "+str(self.alpha)+", qlim = "+str(self.qlim)
+            return "Prismatic(" + conv +") joint with attributes: theta = " + \
+                   str(self.theta) + ", a = " + str(self._a) + ", alpha = " + str(self._alpha) + ", qlim = " + str(self._qlim)
         else:
             return "jointtype unspecified"
 
-    ## TODO getter/setter for all values that need checking
+    # getter/setter for all values that need checking
+
+    @property
+    def alpha(self):
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, value):
+        print("setting alpha to ", value)
+        self._alpha = value
+
+    @property
+    def mesh(self):
+        return self._mesh
+
+    @mesh.setter
+    def mesh(self, value):
+        print("setting mesh to ", value)
+        self._mesh = value
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @offset.setter
+    def offset(self, value):
+        print("setting offset to ", value)
+        self._offset = value
+
+    @property
+    def qlim(self):
+        return self._qlim
+
+    @qlim.setter
+    def qlim(self, value):
+        print("setting qlim to ", value)
+        self._qlim = value
+
+    @property
+    def a(self):
+        return self._a
+
+    @a.setter
+    def a(self, value):
+        print("setting a to ", value)
+        self._a = value
+
     @property
     def I(self):
         return self._I
@@ -236,12 +290,12 @@ class Link(list):
         - For a prismatic joint the D parameter of the link is ignored, and Q used instead.
         - The link offset parameter is added to Q before computation of the transformation matrix.
         """
-        sa = sin(self.alpha)
-        ca = cos(self.alpha)
+        sa = sin(self._alpha)
+        ca = cos(self._alpha)
         if self.flip:
-            q = -q + self.offset
+            q = -q + self._offset
         else:
-            q = q + self.offset
+            q = q + self._offset
         if self.isrevolute():
             # revolute
             st = sin(q)
@@ -256,24 +310,26 @@ class Link(list):
         if not self.mdh:
             # standard DH
 
-            T = array([[ct, -st*ca, st*sa, self.a*ct],
-                       [st, ct*ca, -ct*sa, self.a*st],
+            T = array([[ct, -st * ca, st * sa, self._a * ct],
+                       [st, ct * ca, -ct * sa, self._a * st],
                        [0, sa, ca, d],
                        [0, 0, 0, 1]])
         else:
             # modified DH
 
-            T = array([[ct, -st, 0, self.a],
+            T = array([[ct, -st, 0, self._a],
                        [st*ca, ct*ca, -sa, -sa*d],
                        [st*sa, ct*sa, ca, ca*d],
                        [0, 0, 0, 1]])
 
         return SE3(T)
 
+
 class RevoluteDH(Link):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(jointtype='R', **kwargs)
+
 
 class PrismaticDH(Link):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(jointtype='P', **kwargs)

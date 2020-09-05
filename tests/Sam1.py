@@ -6,8 +6,8 @@ Example tests for serial link to show functionality
 
 # creates a simple three link robot
 from time import sleep
-from roboticstoolbox.robot.threelink import *
-from roboticstoolbox.robot.uprighttl import *
+from roboticstoolbox.models.Threelink import *
+from roboticstoolbox.models.Uprighttl import *
 from roboticstoolbox.models.Puma560 import *
 
 
