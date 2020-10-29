@@ -75,7 +75,7 @@ class Element:
 
             if sRest[0] == '-':
                 negative = "-"
-                sRest = sRest[1]
+                sRest = sRest[1:]
 
             if sRest[0] == "q":
                 self.var = negative + sRest
@@ -156,6 +156,14 @@ class Element:
         if self.eltype != Element.DH_STANDARD and self.eltype != Element.DH_MODIFIED:
             raise ValueError("wrong element type " + str(self))
         print("  adding: " + str(self) + " += " + str(e))
+        print("prismatic= " + str(self.prismatic))
+        print("var= " + str(self.var))
+        print("offset= " + str(self.offset))
+        print("theta= " + str(self.theta))
+        print("a= " + str(self.A))
+        print("d= " + str(self.D))
+        print("e.symconst= " + str(e.symconst))
+        print("e.var= " + str(e.var))
         if e.eltype == self.RZ:
             if e.isjoint():
                 self.prismatic = 0
@@ -217,10 +225,10 @@ class Element:
         sum.constant = self.constant + e.constant
 
         if not sum.isjoint() and sum.symconst is None and sum.constant == 0:
-            print("Eliminate: " + self + " " + e)
+            print("Eliminate: " + str(self) + " " + str(e))
             return None
         else:
-            print("Merge: " + self + " " + e + " := " + sum)
+            print("Merge: " + str(self) + " " + str(e) + " := " + str(sum))
             return sum
 
     '''
@@ -237,53 +245,27 @@ class Element:
 
         if dhWhich == Element.DH_STANDARD:
             order = [2, 0, 3, 4, 0, 1]
-            if self.eltype == Element.TZ and next.eltype == Element.TX or \
-                    self.eltype == Element.TX and next.eltype == Element.RX and next.isjoint() or \
-                    self.eltype == Element.TY and next.eltype == Element.RY and next.isjoint() or \
-                    self.eltype == Element.TZ and next.eltype == Element.RZ and next.isjoint() or \
-                    not self.isjoint() and self.eltype == Element.RX and next.eltype == Element.TX or \
-                    not self.isjoint() and self.eltype == Element.RY and next.eltype == Element.TY or \
-                    not self.isjoint() and not next.isjoint() and self.eltype == Element.TZ and next.eltype == Element.RZ or \
-                    self.eltype == Element.TY and next.eltype == Element.TZ or \
-                    self.eltype == Element.TY and next.eltype == Element.TX:
-                print("Swap: " + self + " <-> " + next)
+            if (self.eltype == Element.TZ and next.eltype == Element.TX) or \
+                    (self.eltype == Element.TX and next.eltype == Element.RX and next.isjoint()) or \
+                    (self.eltype == Element.TY and next.eltype == Element.RY and next.isjoint()) or \
+                    (self.eltype == Element.TZ and next.eltype == Element.RZ and next.isjoint()) or \
+                    (not self.isjoint() and self.eltype == Element.RX and next.eltype == Element.TX) or \
+                    (not self.isjoint() and self.eltype == Element.RY and next.eltype == Element.TY) or \
+                    (not self.isjoint() and not next.isjoint() and self.eltype == Element.TZ and next.eltype == Element.RZ) or \
+                    (self.eltype == Element.TY and next.eltype == Element.TZ) or \
+                    (self.eltype == Element.TY and next.eltype == Element.TX):
+                print("Swap: " + str(self) + " <-> " + str(next))
                 return True
         elif dhWhich == Element.DH_MODIFIED:
             if self.eltype == Element.RX and next.eltype == Element.TX or \
                     self.eltype == Element.RY and next.eltype == Element.TY or \
                     self.eltype == Element.RZ and next.eltype == Element.TZ or \
                     self.eltype == Element.TZ and next.eltype == Element.TX:
-                print("Swap: " + self + " <-> " + next)
+                print("Swap: " + str(self) + " <-> " + str(next))
                 return True
         else:
             raise ValueError("bad DH type")
         return False
-
-    def substituteToZ(self):
-        s = list()
-
-        if self.eltype == Element.RX:
-            s.append(Element(eltype=Element.RY, constant=90.0))
-            s.append(Element(elementIn=self, eltype=Element.RZ))
-            s.append(Element(eltype=Element.RY, constant=-90.0))
-            return s
-        elif self.eltype == Element.RY:
-            s.append(Element(eltype=Element.RX, constant=-90.0))
-            s.append(Element(elementIn=self, eltype=Element.RZ))
-            s.append(Element(eltype=Element.RX, constant=90.0))
-            return s
-        elif self.eltype == Element.TX:
-            s.append(Element(eltype=Element.RY, constant=90.0))
-            s.append(Element(elementIn=self, eltype=Element.TZ))
-            s.append(Element(eltype=Element.RY, constant=-90.0))
-            return s
-        elif self.eltype == Element.TY:
-            s.append(Element(eltype=Element.RX, constant=-90.0))
-            s.append(Element(elementIn=self, eltype=Element.TZ))
-            s.append(Element(eltype=Element.RX, constant=90.0))
-            return s
-        else:
-            return None
 
     def substituteToZ(self, prev=None):
         s = list()
@@ -484,8 +466,15 @@ class ElementList(list):
     def __str__(self):
         return self.toString()
 
+    '''
+    Attempt to group this and subsequent elements into a DH term
+    :return: the number of factors matched, zero means no DH term found
+    
+    Modifies the ElementList and compresses the terms.
+    '''
     def factorize(self, dhWhich, verbose):
         nfactors = 0
+        print("attempting factorize(" + str(self))
         for i in range(len(self)):
             j = i
             jvars = match = 0
@@ -494,10 +483,7 @@ class ElementList(list):
                     break
                 e = self[j]
                 if f == 0 and verbose:
-                    print("Starting at " + e)
-                ee = e
-                ee.factorMatch(dhWhich, f, verbose)
-                e.factorMatch(dhWhich, f, verbose)
+                    print("Starting at " + str(e))
                 if e.factorMatch(dhWhich, f, verbose):
                     j += 1     # move on to next element
                     match += 1
@@ -510,7 +496,7 @@ class ElementList(list):
                 continue
 
             if verbose:
-                print(" found subexpression " + match + " " + jvars)
+                print(" found subexpression " + str(match) + " " + str(jvars))
 
             start = i
             end = j
@@ -526,7 +512,7 @@ class ElementList(list):
             self.insert(i, dh)
             nfactors += 1
             if verbose:
-                print(" result: " + dh)
+                print(" result: " + str(dh))
 
         return nfactors
 
@@ -555,7 +541,7 @@ class ElementList(list):
                 j = jj
                 break
             if crossed and f:
-                print("Float: " + e + " to " + f)
+                print("Float: " + str(e) + " to " + str(f))
                 self.pop(i)
                 self.insert(j-1, e)
                 nchanges += 1
@@ -576,7 +562,7 @@ class ElementList(list):
 
             for i in range(len(self)-1):
                 e = self[i]
-                if e.swap( self[i+1], dhWhich ):
+                if e.swap(self[i+1], dhWhich):
                     self.pop(i)
                     self.insert(i+1, e)
                     nchanges += 1
@@ -588,23 +574,47 @@ class ElementList(list):
     def substitutetoZ(self):
         replacement = list()
         nchanges = 0
+        i = 0
 
-        for i in range(len(self)):
+        while True:
             e = self[i]
             if not e.isjoint():
+                i += 1
+                if i >= len(self):
+                    break
                 continue
             replacement = e.substituteToZ()
             if replacement:
                 # diagnostic string
-                print("ReplaceToZ: " + e + " := ")
+                print("ReplaceToZ: " + str(e) + " := ")
                 for j in range(len(replacement)):
                     print(replacement[j])
 
                 self.pop(i)
-                for j in range(len(replacement)-1, -1, -1):
+                for j in range(len(replacement) - 1, -1, -1):
                     self.insert(i, replacement[j])
-                i += len(replacement)-1
+                i += len(replacement) - 1
                 nchanges += 1
+            i += 1
+            if i >= len(self):
+                break
+
+        # for i in range(len(self)):
+        #     e = self[i]
+        #     if not e.isjoint():
+        #         continue
+        #     replacement = e.substituteToZ()
+        #     if replacement:
+        #         # diagnostic string
+        #         print("ReplaceToZ: " + str(e) + " := ")
+        #         for j in range(len(replacement)):
+        #             print(replacement[j])
+        #
+        #         self.pop(i)
+        #         for j in range(len(replacement)-1, -1, -1):
+        #             self.insert(i, replacement[j])
+        #         i += len(replacement)-1
+        #         nchanges += 1
         return nchanges
 
     '''
@@ -614,27 +624,58 @@ class ElementList(list):
         replacement = list()
         nchanges = 0
         jointYet = False
+        i = 0
 
-        for i in range(len(self)):
+        while True:
             e = self[i]
             if e.isjoint():
                 jointYet = True
+                i += 1
+                if i >= len(self):
+                    break
                 continue
             if i == 0 or not jointYet:  # leave initial const xform
+                i += 1
+                if i >= len(self):
+                    break
                 continue
-            prev = self[i-1]
+            prev = self[i - 1]
             replacement = e.substituteToZ(prev)
             if replacement:
                 # diagnostic string
-                print("ReplaceToZ2: " + e + " := ")
+                print("ReplaceToZ2: " + str(e) + " := ")
                 for j in range(len(replacement)):
-                    print("replacement[j]")
+                    print(replacement[j])
 
                 self.pop(i)
-                for j in range(len(replacement)-1, -1, -1):
+                for j in range(len(replacement) - 1, -1, -1):
                     self.insert(i, replacement[j])
-                i += len(replacement)-1
+                i += len(replacement) - 1
                 nchanges += 1
+            i += 1
+            if i >= len(self):
+                break
+
+        # for i in range(len(self)):
+        #     e = self[i]
+        #     if e.isjoint():
+        #         jointYet = True
+        #         continue
+        #     if i == 0 or not jointYet:  # leave initial const xform
+        #         continue
+        #     prev = self[i-1]
+        #     replacement = e.substituteToZ(prev)
+        #     if replacement:
+        #         # diagnostic string
+        #         print("ReplaceToZ2: " + str(e) + " := ")
+        #         for j in range(len(replacement)):
+        #             print(replacement[j])
+        #
+        #         self.pop(i)
+        #         for j in range(len(replacement)-1, -1, -1):
+        #             self.insert(i, replacement[j])
+        #         i += len(replacement)-1
+        #         nchanges += 1
         return nchanges
 
     '''
@@ -644,31 +685,63 @@ class ElementList(list):
         replacement = list()
         nchanges = 0
         jointYet = False
+        i = 1
 
-        for i in range(1, len(self)):
+        while True:
             e = self[i]
             if e.isjoint():
                 jointYet = True
             if i == 0 or not jointYet:
+                i += 1
+                if i >= len(self):
+                    break
                 continue
-            prev = self[i-1]
-            if i+1 < len(self):
-                next = self[i+1]
+            prev = self[i - 1]
+            if i + 1 < len(self):
+                next = self[i + 1]
             else:
                 next = None
             replacement = e.substituteY(prev, next)
             if replacement:
                 # diagnostic string
-                print("ReplaceY: " + prev + e + " := ")
+                print("ReplaceY: " + str(prev) + str(e) + " := ")
                 for j in range(len(replacement)):
                     print(replacement[j])
 
                 self.pop(i)
-                self.pop(i-1)
-                for j in range(len(replacement)-1, -1, -1):
-                    self.insert(i-1, replacement[j])
-                i += len(replacement)-2
+                self.pop(i - 1)
+                for j in range(len(replacement) - 1, -1, -1):
+                    self.insert(i - 1, replacement[j])
+                # i += len(replacement) - 2
                 nchanges += 1
+            i += 1
+            if i >= len(self):
+                break
+
+        # for i in range(1, len(self)):
+        #     e = self[i]
+        #     if e.isjoint():
+        #         jointYet = True
+        #     if i == 0 or not jointYet:
+        #         continue
+        #     prev = self[i-1]
+        #     if i+1 < len(self):
+        #         next = self[i+1]
+        #     else:
+        #         next = None
+        #     replacement = e.substituteY(prev, next)
+        #     if replacement:
+        #         # diagnostic string
+        #         print("ReplaceY: " + str(prev) + str(e) + " := ")
+        #         for j in range(len(replacement)):
+        #             print(replacement[j])
+        #
+        #         self.pop(i)
+        #         self.pop(i-1)
+        #         for j in range(len(replacement)-1, -1, -1):
+        #             self.insert(i-1, replacement[j])
+        #         i += len(replacement)-2
+        #         nchanges += 1
 
         return nchanges
 
@@ -677,17 +750,36 @@ class ElementList(list):
     '''
     def merge(self):
         nchanges = 0
+        i = 0
 
-        for i in range(len(self)-1):
+        while True:
             e = self[i]
             e = e.merge(self[i+1])
             if e == self[i]:
+                i += 1
+                if i >= len(self)-1:
+                    break
                 continue
             self.pop(i)
             self.pop(i)
             if e:
                 self.insert(i, e)
             nchanges += 1
+            i += 1
+            if i >= len(self)-1:
+                break
+
+        # for i in range(len(self)-1):
+        #     print("iteration: " + str(i))
+        #     e = self[i]
+        #     e = e.merge(self[i+1])
+        #     if e == self[i]:
+        #         continue
+        #     self.pop(i)
+        #     self.pop(i)
+        #     if e:
+        #         self.insert(i, e)
+        #     nchanges += 1
 
         return nchanges
 
@@ -729,7 +821,11 @@ class ElementList(list):
             if nchanges == 0:
                 print("** deal with Ry/Ty")
                 nchanges += self.substituteToZ2()
+                # print("substitutetoZ2 complete")
+                # print("nchanges = " + str(nchanges))
                 nchanges += self.merge()
+                # print("merge complete")
+                # print("nchanges = " + str(nchanges))
             if not (nchanges > 0 and nloops < 10):
                 break
             else:
@@ -748,7 +844,7 @@ class DHFactor():
     def __init__(self, src):
         self.results = ElementList()
         try:
-            results = self.parseString(src)
+            self.results = self.parseString(src)
             print("In DHFactor, parseString is done")
         except ValueError:
             print("Value Error")
@@ -785,7 +881,7 @@ class DHFactor():
         xform = ""
 
         for i in range(start, end):
-            e = self.results[0]
+            e = self.results[i]
 
             if len(xform) > 0:
                 xform += "*"
@@ -808,7 +904,7 @@ class DHFactor():
     '''
     def dh(self):
         s = "["
-        theta, d = str()
+        theta, d = str(), str()
 
         for i in range(len(self.results)):
             e = self.results[i]
@@ -905,7 +1001,7 @@ class DHFactor():
         print("INIT: " + buffer)
 
         # each token is [R|T][x|y|z](arg)
-        pattern = re.compile(r"([RT][xyz]\([^)]+\))")
+        pattern = re.compile(r"([RTrt][xyzXYZ]\([^)]+\))")
         tokens = pattern.findall(buffer)
         for i in tokens:
             l.append(Element(stringIn=i))
@@ -915,7 +1011,7 @@ class DHFactor():
         l.simplify()
         print(l)
 
-        l.factorize(Element.DH_STANDARD, 0)
+        l.factorize(Element.DH_STANDARD, 1)
         print(l)
 
         return l
