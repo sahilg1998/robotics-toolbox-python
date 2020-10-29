@@ -1,4 +1,6 @@
-from roboticstoolbox.tools import *
+print('running __init__')
 from roboticstoolbox.robot import *
-import roboticstoolbox.models
-import roboticstoolbox.backend
+from roboticstoolbox.models import *
+from roboticstoolbox.mstraj import *
+from roboticstoolbox.jtraj import *
+print('done __init__')
