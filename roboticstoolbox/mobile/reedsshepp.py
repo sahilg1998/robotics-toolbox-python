@@ -3,9 +3,6 @@ Python ReedShepp Planner
 @Author: Kristian Gibson
 TODO: Comments + Sphynx Docs Structured Text
 TODO: Bug-fix, testing
-TODO: Add support for extra words
-      here: http://planning.cs.uiuc.edu/node822.html
-      based the original article here: https://projecteuclid.org/euclid.pjm/1102645450
 
 Not ready for use yet.
 """
@@ -13,6 +10,7 @@ from numpy import disp
 from scipy import integrate
 from spatialmath.base.transforms2d import *
 from spatialmath.base.vectors import *
+
 
 class ReedsShepp:
     def __init__(self, q0, qf, max_curve, d1):
@@ -29,6 +27,11 @@ class ReedsShepp:
         k = np.argmin(L)
         self._best_path = self._words[k]
         self._best_path = generate_trajectories(self._best_path, self._max_c, d1, q0)
+
+        disp("Words")
+        disp(self._words)
+        disp("Best Path")
+        disp(self._best_path)
 
     @property
     def best_path(self):
@@ -66,26 +69,12 @@ class ReedsShepp:
                 color = 'r'
 
             if i == 0:
-                x = word["traj"][i][0]
-                y = word["traj"][i][1]
+                x = word["traj"][i][:, 0]
+                y = word["traj"][i][:, 1]
             else:
-                x = [x[len(x) - 1], word["traj"][i][0][0], word["traj"][i][0][1]]
-                y = [y[len(y) - 1], word["traj"][i][1][0], word["traj"][i][1][1]]
+                x = word["traj"][i][:, 0]
+                y = word["traj"][i][:, 1]
 
-            """ if any(opt.join) and i < 2:
-                plt.plot(x[len(x) - 1], y[len(y) - 1], np.all(opt.join))
-
-            if any(opt.circles):
-                t = SE2(word.traj[i, 0])
-                r = 1 / self._max_c
-                c = t * [[0], [word.dir(i) * r]]
-
-                plt.Circle(c, r, opt.circles)
-                plt.plot(c, 'k+', markersize=2)
-            """
-            disp("aa")
-            disp(x)
-            disp(y)
             plt.plot(x, y, color, linewidth=2)
         plt.xlabel('X')
         plt.ylabel('Y')
@@ -100,8 +89,6 @@ def generate_trajectories(words, max_c, d, q0):
     out["traj"] = [[], [], []]
     out["dir"] = [[], [], []]
 
-    disp("final")
-    disp(words)
     for i in range(3):
         m = words["word"][i]
         l = words["lengths"][i]
@@ -115,10 +102,11 @@ def generate_trajectories(words, max_c, d, q0):
         if i == 0:
             out["traj"][i] = p
         else:
-            out["traj"][i] = p[:, 1:(len(p) - 1)]
+            out["traj"][i] = p
+            np.delete(out["traj"][i], 0)
 
         out["dir"][i] = np.sign(l)
-        p0 = p[0]
+        p0 = p[-1]
 
     return out
 
@@ -127,22 +115,14 @@ def pathseg(l, dir, m, max_c, p0):
     f = None
     q = []
     q0 = p0
-    disp("integrate")
-    disp(l)
-    disp(dir)
-    disp(m)
-    disp(max_c)
-    disp(p0)
     # PEP 8 doesn't like this but it's the nicest way to define a function we'll use for the ODE
     if m == 's':
-        f = lambda f_t, f_q: np.transpose([dir * np.array([np.cos(f_q[2]), np.sin(f_q[2]), 0])])
+        f = lambda f_t, f_q: dir * np.transpose(np.array([np.cos(f_q[2]), np.sin(f_q[2]), 0]))
     elif m == 'l' or m == 'r':
-        f = lambda f_t, f_q: np.transpose(dir * np.array([np.cos(f_q[2]), np.sin(f_q[2]), dir * max_c]))
+        f = lambda f_t, f_q: dir * np.transpose(np.array([np.cos(f_q[2]), np.sin(f_q[2]), dir * max_c]))
 
     results = integrate.solve_ivp(f, [l[0], l[-1]], q0, t_eval=l, method="RK45")
-
     q = np.transpose(results.y)
-    disp(results)
     return q
 
 
@@ -309,6 +289,7 @@ def cart2pol(x, y):
     rho = np.sqrt(x ** 2 + y ** 2)
     phi = np.arctan2(y, x)
     return phi, rho
+
 
 class Error(Exception):
     """Base class for other exceptions"""

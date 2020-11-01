@@ -1,72 +1,61 @@
 """
-Vehicle object.
+Python Vehicle
 @Author: Kristian Gibson
-TODO: Bug-fixing, change remaining matlab placeholders
 TODO: Comments + Sphynx Docs Structured Text
-TODO: Replace vargin with parameters
+TODO: Bug-fix, testing
 
 Not ready for use yet.
 """
-
 from numpy import disp
-from scipy import integrate, randn
-from scipy.linalg import sqrtm
+from scipy import integrate
+from scipy import linalg
+import matplotlib.pyplot as plt
+from roboticstoolbox.mobile import *
 from spatialmath.base.transforms2d import *
 from spatialmath.base.vectors import *
-from roboticstoolbox.robot.utility import numrows
+
 
 class Vehicle:
+    def __init__(self, covar=None, speed_max=None, l=None, x0=None, dt=None, r_dim=None,
+                 steer_max=None, verbose=None):
+        self._covar = np.array([])
+        self._r_dim = 0.2
+        self._dt = 0.1
+        self._x0 = np.zeros(3, 1)
+        self._x = None
+        self._speed_max = 1
+        self._v_handle = np.array([])
+        self._driver = None
+        self._odometry = None
 
-    def __init__(self, x, x_hist, speedmax, dim, rdim, dt, v, odometry, verbose, driver, x0, options,
-                 vhandle, vtrail):
-        # state
-        self._x = x                 # true state (x,y,theta)
-        self._x_hist = x_hist       # x history
+        # TODO: Do we even need these if statements?
+        if covar is not None:
+            self._v = covar
+        if speed_max is not None:
+            self._speed_max = speed_max
+        if l is not None:
+            self._l = l
+        if x0 is not None:
+            self._x0 = x0
+            # TODO: Add assert
+        if dt is not None:
+            self._dt = dt
+        if r_dim is not None:
+            self._r_dim = r_dim
+        if verbose is not None:
+            self._verbose = verbose
+        if steer_max is not None:
+            self._steer_max = steer_max
 
-        # parameters
-        self._speedmax = speedmax   # maximum speed
-        self._dim = dim             # dimension of the world -dim -> +dim in x and y
-        self._rdim = rdim           # dimension of the robot
-        self._dt = dt               # sample interval
-        self._v = v                 # odometry covariance
-        self._odometry = odometry   # distance moved in last interval
-        self._verbose = verbose
-        self._driver = driver       # driver object
-        self._x0 = x0               # initial state
-        self._options = options
-        self._vhandle = vhandle     # handle to vehicle graphics object
-        self._vtrail = vtrail     # vehicle trail
+        self._x_hist = np.array([])
 
-        # TODO replace opt with further parameters
-        """oplt.covar = []
-        oplt.rdim = 0.2
-        oplt.dt = 0.1
-        oplt.x0 = zeros(3, 1)
-        oplt.speedmax = 1
-        oplt.vhandle = []
+    @property
+    def l(self):
+        return self._l
 
-        [opt, args] = tb_optparse(opt, varargin)
-
-        self._v = oplt.covar
-        self._rdim = oplt.rdim
-        self._dt = oplt.dt
-        self._x0 = oplt.x0(:)
-        assert (isvec(self._x0, 3), 'Initial configuration must be a 3-vector')
-        self._speedmax = oplt.speedmax
-        self._options = args  # unused options go back to the subclass
-        self._vhandle = oplt.vhandle"""
-        self._x_hist = []
-
-        """if nargin > 1:
-            self._x = x0(:)
-        else:
-            self._x = self._x0
-        self._x_hist = []"""
-
-        if any(self._driver):
-            self._driver.init()
-
-        self._vhandle = []
+    @property
+    def steer_max(self):
+        return self._steer_max
 
     @property
     def x(self):
@@ -77,16 +66,16 @@ class Vehicle:
         return self._x_hist
 
     @property
-    def speedmax(self):
-        return self._speedmax
+    def speed_max(self):
+        return self._speed_max
 
     @property
     def dim(self):
         return self._dim
 
     @property
-    def rdim(self):
-        return self._rdim
+    def r_dim(self):
+        return self._r_dim
 
     @property
     def dt(self):
@@ -113,170 +102,187 @@ class Vehicle:
         return self._x0
 
     @property
-    def options(self):
-        return self._options
+    def v_handle(self):
+        return self._v_handle
 
     @property
-    def vhandle(self):
-        return self._vhandle
+    def v_trail(self):
+        return self._v_trail
 
     @property
-    def vtrail(self):
-        return self._vtrail
+    def driver(self):
+        return self._driver
 
-    #TODO: update from matlab
-    def path(self, t, u, y0):
+    # Example
+    def init(self, x0=None):
+        if x0 is not None:
+            self._x = x0
+        else:
+            self._x = self._x0
+
+        self._x_hist = np.array([])
+
+        if self._driver is not None:
+            self._driver.init()  # TODO: make this work?
+
+        self._v_handle = np.array([])
+
+    def path(self, t=None, u=None, y0=None):  # TODO: Might be the source of some errors
+        tt = None
+        yy = None
+
         if len(t) == 1:
-            tt = [0 t]
+            tt = np.array([0, t[-1]])
         else:
             tt = t
 
-        """if nargin < 4:
-            y0 = [0 0 0]
-        out = ode45( @(t,y) self._deriv(t, y, u), tt, y0)
+        if y0 is None:
+            y0 = np.array([0, 0, 0])
 
-        y = np.transpose(out.y)
-        if nargout == 0:
-            plt.plot(y[1], y[2])
+        ode_out = integrate.solve_ivp(self.deriv(t, None, u), [tt[0], tt[-1]], y0, t_eval=tt, method="RK45")
+        y = np.transpose(ode_out.y)
+
+        if t is None:
+            plt.plot(y[:][0], y[:][2])
             plt.xlabel('X')
             plt.ylabel('Y')
         else:
             yy = y
             if len(t) == 1:
-                # if scalar time given, just return final state
-                yy = yy(end,:)
-        """
+                yy = yy[-1][:]
+
         return yy
+
+    # This function is overridden by the child class
+    def deriv(self, t, y=None, u=None):  # TODO: I have no idea where Y comes from, here!
+        return y
 
     def add_driver(self, driver):
         self._driver = driver
+        driver._veh = self
 
     def update(self, u):
-        xp = self._x # previous state
-        self._x[0] = self._x[0] + u[0]*self._dt*np.cos(self._x[2])
-        self._x[1] = self._x[1] + u[0]*self._dt*np.sin(self._x[2])
-        self._x[2] = self._x[2] + u[0]*self._dt/self._L * u[1]
-        odo = [np.norm(self._x[0:1]-xp[0:1]), self._x[2]-xp[2]]
+        xp = self._x
+        self._x[0] = self._x[0] + u[0] * self._dt * np.cos(self._x[2])
+        self._x[1] = self._x[1] + u[0] * self._dt * np.sin(self._x[2])
+        self._x[2] = self._x[2] + u[0] * self._dt / self._l * u[1]
+        odo = np.array([col_norm(self._x[0:2] - xp[0:2], self._x[2] - xp[2])])  # TODO: Right indexing?
         self._odometry = odo
 
-        self._x_hist = [self._x_hist, np.transpose(self._x)]   # maintain history
+        self._x_hist = np.concatenate(self._x_hist, np.transpose(self._x))
         return odo
 
-    def step(self, varargin):
-        u = self._control(varargin[:])
+    def step(self, speed=None, steer=None):
+        u = self.control(speed, steer)
+        odo = self.update(u)
 
-        # compute the true odometry and update the state
-        odo = self._update(u)
+        if self._v is not None:
+            odo = self._odometry + np.random.rand(1, 2) * linalg.sqrtm(self._v)  # TODO: linalg imported?
 
-        # add noise to the odometry
-        if any(self._v):
-            odo = self._odometry + randn(1,2)*sqrtm(self._v)
         return odo
 
-    def control(self, speed, steer):
-        u = None
-        nargin = None
-        if nargin < 2:
-            # if no explicit demand, and a driver is attached, use
-            # it to provide demand
-            if any(self._driver):
-                [speed, steer] = self._driver.demand()
+    def control(self, speed=None, steer=None):
+        u = np.zeros(2)
+        if speed is None and steer is None:
+            if self._driver is not None:
+                speed, steep = self._driver.demand()
             else:
-                # no demand, do something safe
                 speed = 0
                 steer = 0
 
-        # clip the speed
-        if not any(self._speedmax):
+        if self._speed_max is None:
             u[0] = speed
         else:
-            u[0] = np.min(self._speedmax, np.max(-self._speedmax, speed))
+            u[0] = np.minimum(self._speed_max, np.maximum(-self._speed_max, speed))
 
-        # clip the steering angle
-        #Todo: remove isprop and replace with parameter checks
-        if isprop(self, 'steermax') and any(self._steermax):
-            u[1] = np.max(-self._steermax, np.min(self._steermax, steer))
+        if self._steer_max is not None:
+            u[1] = np.maximum(-self._steer_max, np.minimum(self._steer_max, steer))
         else:
             u[1] = steer
+
         return u
 
-    def run(self, nsteps):
-        nargin = None
-        nargout = None
-        if nargin < 2:
-            nsteps = 1000
-        if any(self._driver):
+    def run(self, n_steps=None):
+        if n_steps is None:
+            n_steps = 1000
+        if self._driver is not None:
             self._driver.init()
-        #self._clear()
-        if any(self._driver):
+        if self._driver is not None:
             self._driver.plot()
 
         self._plot()
-        for i in range(nsteps):
-            self._step()
-            if nargout == 0:
-                # if no output arguments then plot each step
-                self._plot()
+        for i in range(0, n_steps):
+            self.step()
+            # TODO: There's a nargout here... is this really needed or can it be done differently?
+
         p = self._x_hist
         return p
 
-    def run2(self, T, x0, speed, steer):
-        self._init(x0)
+    def run_2(self, t, x0, speed, steer):
+        self.init(x0)
 
-        for i in range(T/self._dt):
-            self._update([speed, steer])
+        for i in range(0, (t/self._dt)):
+            self.update(np.array([speed, steer]))
+
         p = self._x_hist
         return p
 
-    def plot(self, varargin):
-        if not any(self._vhandle):
-            self._vhandle = Vehicle.plotv(self._x, varargin[:])
+    def plot(self):
+        # TODO: Add vargin arguments. There's more here.
+        if self._v_handle is None:
+            self._v_handle = plot_v(self._x)
 
-        if any(varargin) and isinstance(varargin[1], int):
-            # V.plot(X)
-            pos = varargin[1] # use passed value
-        else:
-            # V.plot()
-            pos = self._x    # use current state
+        pos = self._x
+        plot_v(self._v_handle, pos)
 
-        # animate it
-        Vehicle.plotv(self._vhandle, pos)
-
-    def plot_xy(self, varargin):
-        nargout = None
+    def plot_xy(self):
+        # TODO: this also has some vargin
         xyt = self._x_hist
-        if nargout == 0:
-            plt.plot(xyt[0], xyt[1], varargin[:])
-        else:
-            out = xyt
-        return xyt
+        plt.plot(xyt[0, :], xyt[1, :])
 
-    def verbosity(self, v):
+    def verbiosity(self, v):
         self._verbose = v
 
     def display(self, nav):
-        #loose = strcmp( get(0, 'FormatSpacing'), 'loose')
-        if loose:
-            disp(' ')
-        disp([inputname[0], ' = '])
-        disp(nav)
+        # write later idk what they want
+        disp("display function doesn't currently do anything")
 
-    def char(self, veh):
-        s = ('Superclass: Vehicle' + "\nmax speed: " + self._speedmax +  " dT: " + self._speedmax + "nhist" + self._dt
-            + " " + numrows(self._x_hist))
-        if any(self._v):
-            s += "    V=(" + self._v(1,1) + ", " + self._v(2,2) + ")"
+    def char(self):
+        s = 'Superclass: Vehicle' + \
+            "\nMax speed=" + self._speed_max + \
+            "\ndt=" + self._dt + \
+            "\nn_hist=" + np.shape(self._x_hist)[0]
 
-        s += "    configuration: x: " + self._x + " y: " + self._x + " theta: " + self._x
-        if any(self._driver):
-            s += '    driven by::' + self._driver
+        if self._v is not None:
+            s = s + "\nV=" + self._v[0, 0] + ", " + self._v[1, 1] + ")"
+
+        # Todo: this one should show x, y, theta
+        s = s + "Configuration:" + self._x
+
+        if self._driver is not None:
+            s = s + "\nDriven by: " + self._driver  # TODO: this might break
 
         return s
 
-    #TODO Change vargins to params
-    def plotv(self, varargin):
-        if isinstance(varargin[1], dict):
-            plt.plot(varargin[1], 'handle', varargin[1]) #Change to vehicle_plot
-        else:
-            h = plt.plot(varargin[1], 'fillcolor', 'b', 'alpha', 0.5)
+
+def plot_v(handle=None, pose_x=None):
+    # TODO add vargin stuff
+    if handle is not None:
+        plot_vehicle(pose_x, handle)
+    else:
+        handle = None
+        fillcolor = 'b'
+        alpha = 0.5
+        h = plot_vehicle(pose_x, handle, fillcolor, alpha)
         return h
+
+
+def col_norm(x):
+    y = np.array([])
+    if x.ndim > 1:
+        x = np.column_stack(x)
+        for vector in x:
+            y = np.append(y, np.linalg.norm(vector))
+    else:
+        y = np.linalg.norm(x)
+    return y
