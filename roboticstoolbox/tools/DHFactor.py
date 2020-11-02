@@ -34,20 +34,20 @@ class Element:
             elementIn=None,
             stringIn=None,
             eltype=None,
-            constant=None,
+            constant=0.0,
             sign=0):
 
         self.var = None         # eg. q1, for joint var types
         self.symconst = None    # eg. L1, for lengths
 
         # DH parameters, only set if type is DH_STANDARD/MODIFIED
-        self.theta = None
-        self.alpha = None
-        self.A = None
-        self.D = None
+        self.theta = 0
+        self.alpha = 0
+        self.A = 0
+        self.D = 0
         self.prismatic = None
         self.offset = None
-        self.constant = None
+        self.constant = 0.0
 
         if stringIn:
             if elementIn or eltype or constant:
@@ -103,10 +103,9 @@ class Element:
             #     self.negate()
 
         # one of TX, TY ... RZ, DH_STANDARD/MODIFIED
-        if eltype:
+        if eltype is not None:
             self.eltype = eltype
-            if constant:
-                self.constant = constant    # eg. 90, for angles
+            self.constant = constant    # eg. 90, for angles
             if sign < 0:
                 self.negate()
 
@@ -156,14 +155,14 @@ class Element:
         if self.eltype != Element.DH_STANDARD and self.eltype != Element.DH_MODIFIED:
             raise ValueError("wrong element type " + str(self))
         print("  adding: " + str(self) + " += " + str(e))
-        print("prismatic= " + str(self.prismatic))
-        print("var= " + str(self.var))
-        print("offset= " + str(self.offset))
-        print("theta= " + str(self.theta))
-        print("a= " + str(self.A))
-        print("d= " + str(self.D))
-        print("e.symconst= " + str(e.symconst))
-        print("e.var= " + str(e.var))
+        # print("prismatic= " + str(self.prismatic))
+        # print("var= " + str(self.var))
+        # print("offset= " + str(self.offset))
+        # print("theta= " + str(self.theta))
+        # print("a= " + str(self.A))
+        # print("d= " + str(self.D))
+        # print("e.symconst= " + str(e.symconst))
+        # print("e.var= " + str(e.var))
         if e.eltype == self.RZ:
             if e.isjoint():
                 self.prismatic = 0
@@ -325,45 +324,45 @@ class Element:
         # note that if the rotation is -90 we must make the displacement -ve
         if prev.eltype == Element.RX and self.eltype == Element.TY:
             # RX.TY -> TZ.RX
-            s.append(Element(elementIn=self, eltype=Element.TZ, constant=prev.constant))
+            s.append(Element(elementIn=self, eltype=Element.TZ, sign=prev.constant))
             s.append(Element(elementIn=prev))
             self.rules[0] += 1
             return s
         elif prev.eltype == Element.RX and self.eltype == Element.TZ:
             # RX.TZ -> TY.RX
-            s.append(Element(elementIn=self, eltype=Element.TY, constant=-prev.constant))
+            s.append(Element(elementIn=self, eltype=Element.TY, sign=-prev.constant))
             s.append(Element(elementIn=prev))
             self.rules[2] += 1
             return s
         elif prev.eltype == Element.RY and self.eltype == Element.TX:
             # RY.TX -> TZ.RY
-            s.append(Element(elementIn=self, eltype=Element.TZ, constant=-prev.constant))
+            s.append(Element(elementIn=self, eltype=Element.TZ, sign=-prev.constant))
             s.append(Element(elementIn=prev))
             self.rules[1] += 1
             return s
         elif prev.eltype == Element.RY and self.eltype == Element.TZ:
             # RY.TZ -> TX.RY
-            s.append(Element(elementIn=self, eltype=Element.TX, constant=prev.constant))
+            s.append(Element(elementIn=self, eltype=Element.TX, sign=prev.constant))
             s.append(Element(elementIn=prev))
             self.rules[11] += 1
             return s
         elif prev.eltype == Element.TY and self.eltype == Element.RX:
             # TY.RX -> RX.TZ
             s.append(Element(elementIn=prev))
-            s.append(Element(elementIn=self, eltype=Element.TZ, constant=-self.constant))
+            s.append(Element(elementIn=self, eltype=Element.TZ, sign=-self.constant))
             self.rules[5] += 1
             # return s
             return None
         elif prev.eltype == Element.TX and self.eltype == Element.RZ:
             # TX.RZ -> RZ.TY
             s.append(Element(elementIn=prev))
-            s.append(Element(elementIn=self, eltype=Element.TY, constant=self.constant))
+            s.append(Element(elementIn=self, eltype=Element.TY, sign=self.constant))
             self.rules[5] += 1
             return s
         elif prev.eltype == Element.RY and self.eltype == Element.RX:
             # RY(Q).RX -> RX.RZ(-Q)
             s.append(Element(elementIn=prev))
-            s.append(Element(elementIn=self, eltype=Element.RZ, constant=-1))
+            s.append(Element(elementIn=self, eltype=Element.RZ, sign=-1))
             self.rules[3] += 1
             return s
         elif prev.eltype == Element.RX and self.eltype == Element.RY:
@@ -384,7 +383,8 @@ class Element:
     # negate the arguments of the element
     def negate(self):
 
-        self.constant = -self.constant
+        if self.constant:
+            self.constant = -self.constant
 
         if self.symconst:
             s = list(self.symconst)
@@ -396,9 +396,9 @@ class Element:
                     s[i] = "-"
                 elif s[i] == "-":
                     s[i] = "+"
-                if s[0] == "+":
-                    s.pop(0)
-        s = "".join(s)
+            if s[0] == "+":
+                s.pop(0)
+        self.symconst = "".join(s)
 
     '''
     Return a string representation of the parameters (argument)
@@ -408,8 +408,8 @@ class Element:
     def argString(self):
         s = ""
 
-        if self.eltype == Element.RX or Element.RY or Element.RZ or \
-            Element.TX or Element.TY or Element.TZ:
+        if self.eltype == Element.RX or self.eltype == Element.RY or self.eltype == Element.RZ or \
+            self.eltype == Element.TX or self.eltype == Element.TY or self.eltype == Element.TZ:
             if self.var:
                 s = self.var
             if self.symconst:
@@ -423,34 +423,35 @@ class Element:
                     s = s + "+" + '{0:.3f}'.format(self.constant)
                 else:
                     s = s + '{0:.3f}'.format(self.constant)
-        elif self.eltype == Element.DH_STANDARD or Element.DH_MODIFIED:
+        elif self.eltype == Element.DH_STANDARD or self.eltype==Element.DH_MODIFIED:
             # theta, d, a, alpha
             # theta
-            if self.prismatic == 0:
+            if not self.prismatic:
                 # revolute joint
-                s = s + self.var
-                if self.offset >= 0:
-                    s = s + "+" + '{0:.3f}'.format(self.offset)
-                elif self.offset < 0:
-                    s = s + '{0:.3f}'.format(self.offset)
+                s += str(self.var)
+                if self.offset:
+                    if self.offset >= 0:
+                        s = s + "+" + '{0:.3f}'.format(self.offset)
+                    elif self.offset < 0:
+                        s = s + '{0:.3f}'.format(self.offset)
             else:
                 # prismatic joint
-                s = s + '{0:.3f}'.format(self.theta)
-            s = s + ", "
+                s += '{0:.3f}'.format(self.theta)
+            s += ", "
 
             # d
-            if self.prismatic > 0:
-                s = s + self.var
+            if self.prismatic:
+                s += str(self.var)
             else:
-                s = s + self.D if self.D else s + "0"
-            s = s + ", "
+                s += str(self.D) if self.D else "0"
+            s += ", "
 
             # a
-            s = s + self.A if self.A else s + "0"
-            s = s + ", "
+            s += str(self.A) if self.A else "0"
+            s += ", "
 
             # alpha
-            s = s + '{0:.3f}'.format(self.alpha)
+            s += '{0:.3f}'.format(self.alpha)
         else:
             raise ValueError("bad Element type")
         return s
@@ -843,11 +844,11 @@ class DHFactor():
 
     def __init__(self, src):
         self.results = ElementList()
-        try:
-            self.results = self.parseString(src)
-            print("In DHFactor, parseString is done")
-        except ValueError:
-            print("Value Error")
+        # try:
+        self.results = self.parseString(src)
+        print("In DHFactor, parseString is done")
+        # except ValueError:
+        #     print("Value Error")
         if not self.isValid():
             print("DHFactor: error: Incomplete factorization, no DH equivalent found")
 
@@ -917,17 +918,18 @@ class DHFactor():
                 else:
                     # revolute joint
                     theta = "0"
-                    d = "0" if e.D is None else e.D
+                    d = "0" if e.D is None else str(e.D)
 
                 s += "["
-                s += theta
+                if e.prismatic:
+                    s += theta
+                else:
+                    s += d
                 s += ", "
-                s += d
-                s += ", "
-                s += "0" if e.A is None else e.A
+                s += "0" if e.A is None else str(e.A)
                 s += ", "
                 s += self.angle(e.alpha)
-                s += ", " + e.prismatic
+                s += ", " + str(e.prismatic)
                 s += "],"
         s += "]"
         return s
@@ -1011,7 +1013,7 @@ class DHFactor():
         l.simplify()
         print(l)
 
-        l.factorize(Element.DH_STANDARD, 1)
+        l.factorize(Element.DH_STANDARD, verbose=0)
         print(l)
 
         return l
